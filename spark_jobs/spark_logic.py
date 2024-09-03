@@ -27,7 +27,7 @@ start_date = os.getenv('start_date')
 
 
 # spark-read-api 에서 완성한 api read 함수
-read_api(service_key, url, start_date)
+data_list = read_api(service_key, url, start_date)
 
 
 # RDD로 변환
