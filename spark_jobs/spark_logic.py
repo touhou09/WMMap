@@ -1,6 +1,7 @@
 import os
 import json
-import requests
+
+from utils import read_api
 from datetime import datetime
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
@@ -20,43 +21,14 @@ load_dotenv(dotenv_path=env_path)
 service_key = os.getenv('SERVICE_KEY')
 url = os.getenv('URL')
 
-params = {
-    'serviceKey': service_key,
-    'numOfRows': 30,  # 페이지당 개수 설정 (최대값으로 설정, 필요시 조정)
-    'pageNo': 1,  # 페이지 번호를 1로 고정
-    'crtDt': '20240902',  # 조회 시작일자 (예: 2024년 9월 2일)
-}
 
-# 데이터를 저장할 리스트 초기화
-data_list = []
+# 일단 환경변수로 지정, 이후 airflow에서 서버날짜로 관리
+start_date = os.getenv('start_date')
 
-while True:
-    # GET 요청 보내기
-    response = requests.get(url, params=params)
 
-    if response.status_code == 200:
-        data = response.json()
+# spark-read-api 에서 완성한 api read 함수
+data_list = read_api(service_key, url, start_date)
 
-        # 응답에서 데이터 추출 및 리스트에 추가
-        body_data = data.get('body', [])
-        for item in body_data:
-            data_list.append(item)
-
-        # 총 개수와 현재 페이지 계산
-        total_count = data.get('totalCount', 0)
-        current_page = params['pageNo']
-        num_of_rows = params['numOfRows']
-
-        # 모든 데이터를 다 가져왔는지 확인
-        if current_page * num_of_rows >= total_count:
-            break  # 반복 종료
-
-        # 다음 페이지로 넘어가기
-        params['pageNo'] += 1
-    else:
-        print(f"요청 실패: {response.status_code}")
-        print("응답 내용:", response.text)
-        break  # 오류 발생 시 루프 종료
 
 # RDD로 변환
 rdd = spark.sparkContext.parallelize(data_list)
@@ -107,6 +79,8 @@ sorted_df = result_df.withColumn("data", sort_udf(col("data")))
 # JSON으로 변환
 json_df = sorted_df.withColumn("json_data", to_json(struct(col("*")))).select("json_data")
 
+# Spark 세션 종료
+spark.stop() 
 """
 # JSON 데이터를 수집하여 출력
 json_results = json_df.collect()
