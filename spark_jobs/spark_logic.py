@@ -21,11 +21,14 @@ load_dotenv(dotenv_path=env_path)
 service_key = os.getenv('SERVICE_KEY')
 url = os.getenv('URL')
 
+
 # 일단 환경변수로 지정, 이후 airflow에서 서버날짜로 관리
 start_date = os.getenv('start_date')
 
 
+# spark-read-api 에서 완성한 api read 함수
 read_api(service_key, url, start_date)
+
 
 # RDD로 변환
 rdd = spark.sparkContext.parallelize(data_list)
