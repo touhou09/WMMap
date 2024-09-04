@@ -4,7 +4,9 @@ from datetime import datetime
 import logging
 from dotenv import load_dotenv
 
-from pyspark.sql.functions import col, split, trim, when, explode, concat_ws
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import split, trim, explode, when, concat_ws, col, collect_list, struct, to_json, udf
+from pyspark.sql.types import StringType, ArrayType, StructType, StructField
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -63,3 +65,13 @@ def extract_and_process_regions(df):
     
     # RCPTN_RGN_NM 열 삭제
     return df.drop("RCPTN_RGN_NM")
+
+def group_and_sort_data(region_df):
+    
+    # groupby 후 지역별로 sort
+    
+    return region_df.groupBy("primary_region", "secondary_region").agg(
+        collect_list(
+            struct("SN", "CRT_DT", "MSG_CN", "EMRG_STEP_NM", "DST_SE_NM")
+        ).alias("data")
+    ).orderBy("primary_region", "secondary_region")

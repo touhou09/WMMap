@@ -46,11 +46,8 @@ df = create_dataframe(spark, data_list, schema)
 # 지역별로 데이터 추출 및 처리 함수
 region_df = extract_and_process_regions(df)
 # 데이터 그룹화 및 정렬
-result_df = region_df.groupBy("primary_region", "secondary_region").agg(
-    collect_list(
-        struct("SN", "CRT_DT", "MSG_CN", "EMRG_STEP_NM", "DST_SE_NM")
-    ).alias("data")
-).orderBy("primary_region", "secondary_region")
+result_df = group_and_sort_data(region_df)
+
 
 # 데이터를 'CRT_DT' 필드를 기준으로 날짜 순으로 정렬하는 함수
 def sort_by_date(data):
