@@ -8,7 +8,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import explode, col, trim, split, when, concat_ws, collect_list, udf, struct, to_json
 from pyspark.sql.types import StringType, ArrayType, StructType, StructField
 
-from utils import create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data
+from utils import create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data, convert_to_json
 
 # Spark 세션 생성
 spark = SparkSession.builder \
@@ -55,19 +55,4 @@ json_df = convert_to_json(sorted_df)
 #나중에 S3나 DB에 저장하는 로직을 넣을 예정
 
 # Spark 세션 종료
-spark.stop() 
-"""
-# JSON 데이터를 수집하여 출력
-json_results = json_df.collect()
-for row in json_results:
-    print(row.json_data)
-
-# Spark 세션 종료
-spark.stop() 
-"""
-
-"""
-위의 주석 내용은 출력 확인을 위해서 분리해놓은 내용
-
-아래 처리 후 저장 따로 작성 후 테스트 코드로 검증
-"""
+spark.stop()
