@@ -1,3 +1,10 @@
+import sys
+import os
+
+# 프로젝트 루트 경로를 PYTHONPATH에 추가
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
+
 import unittest
 from unittest.mock import patch, MagicMock
 from spark_jobs.utils import read_api

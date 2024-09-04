@@ -42,3 +42,11 @@ def read_api(url, service_key, start_date):
             break
 
     return data_list
+
+def create_dataframe(spark, data_list, schema):
+    
+    # spark 세션 객체를 받아서 실행하는 방식으로 구성
+    
+    rdd = spark.sparkContext.parallelize(data_list)
+    return spark.createDataFrame(rdd, schema)
+

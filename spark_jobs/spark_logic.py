@@ -29,10 +29,6 @@ start_date = os.getenv('start_date')
 # spark-read-api 에서 완성한 api read 함수
 data_list = read_api(service_key, url, start_date)
 
-
-# RDD로 변환
-rdd = spark.sparkContext.parallelize(data_list)
-
 # 데이터 스키마 정의
 schema = StructType([
     StructField("SN", StringType(), True),
@@ -43,8 +39,8 @@ schema = StructType([
     StructField("RCPTN_RGN_NM", StringType(), True)
 ])
 
-# RDD를 DataFrame으로 변환
-df = spark.createDataFrame(rdd, schema)
+# df 만들기 함수 호출
+df = create_dataframe(spark, data_list, schema)
 
 # 지역 정보 추출 및 데이터 처리
 region_df = df.withColumn("regions", split(trim(col("RCPTN_RGN_NM")), ",")) \
@@ -78,6 +74,8 @@ sorted_df = result_df.withColumn("data", sort_udf(col("data")))
 
 # JSON으로 변환
 json_df = sorted_df.withColumn("json_data", to_json(struct(col("*")))).select("json_data")
+
+#나중에 S3나 DB에 저장하는 로직을 넣을 예정
 
 # Spark 세션 종료
 spark.stop() 
