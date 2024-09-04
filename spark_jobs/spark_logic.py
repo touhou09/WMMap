@@ -8,6 +8,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import explode, col, trim, split, when, concat_ws, collect_list, udf, struct, to_json
 from pyspark.sql.types import StringType, ArrayType, StructType, StructField
 
+from utils import create_dataframe, extract_and_process_regions
+
 # Spark 세션 생성
 spark = SparkSession.builder \
     .appName("DataProcessingApp") \
@@ -41,13 +43,8 @@ schema = StructType([
 
 # df 만들기 함수 호출
 df = create_dataframe(spark, data_list, schema)
-
-# 지역 정보 추출 및 데이터 처리
-region_df = df.withColumn("regions", split(trim(col("RCPTN_RGN_NM")), ",")) \
-    .withColumn("regions", explode(col("regions"))) \
-    .withColumn("primary_region", when(col("regions").contains(" "), split(col("regions"), " ")[0]).otherwise(col("regions"))) \
-    .withColumn("secondary_region", when(col("regions").contains(" "), concat_ws(" ", split(col("regions"), " ").getItem(1))).otherwise("전체"))
-
+# 지역별로 데이터 추출 및 처리 함수
+region_df = extract_and_process_regions(df)
 # 데이터 그룹화 및 정렬
 result_df = region_df.groupBy("primary_region", "secondary_region").agg(
     collect_list(

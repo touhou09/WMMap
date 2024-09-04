@@ -4,6 +4,8 @@ from datetime import datetime
 import logging
 from dotenv import load_dotenv
 
+from pyspark.sql.functions import col, split, trim, when, explode, concat_ws
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,3 +52,14 @@ def create_dataframe(spark, data_list, schema):
     rdd = spark.sparkContext.parallelize(data_list)
     return spark.createDataFrame(rdd, schema)
 
+def extract_and_process_regions(df):
+    
+    # df에서 지역별로 나누는 과정
+    
+    df = df.withColumn("regions", split(trim(col("RCPTN_RGN_NM")), ",")) \
+           .withColumn("regions", explode(col("regions"))) \
+           .withColumn("primary_region", when(col("regions").contains(" "), split(col("regions"), " ")[0]).otherwise(col("regions"))) \
+           .withColumn("secondary_region", when(col("regions").contains(" "), concat_ws(" ", split(col("regions"), " ").getItem(1))).otherwise("전체"))
+    
+    # RCPTN_RGN_NM 열 삭제
+    return df.drop("RCPTN_RGN_NM")
