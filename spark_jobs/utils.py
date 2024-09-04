@@ -75,3 +75,20 @@ def group_and_sort_data(region_df):
             struct("SN", "CRT_DT", "MSG_CN", "EMRG_STEP_NM", "DST_SE_NM")
         ).alias("data")
     ).orderBy("primary_region", "secondary_region")
+    
+def sort_data_by_date(result_df):
+    # 데이터를 'CRT_DT' 필드를 기준으로 날짜 순으로 정렬
+    
+    def sort_by_date(data):
+        sorted_data = sorted(data, key=lambda x: datetime.strptime(x['CRT_DT'], '%Y/%m/%d %H:%M:%S'))
+        return sorted_data
+
+    sort_udf = udf(sort_by_date, ArrayType(StructType([
+        StructField("SN", StringType(), True),
+        StructField("CRT_DT", StringType(), True),
+        StructField("MSG_CN", StringType(), True),
+        StructField("EMRG_STEP_NM", StringType(), True),
+        StructField("DST_SE_NM", StringType(), True)
+    ])))
+    
+    return result_df.withColumn("data", sort_udf(col("data")))

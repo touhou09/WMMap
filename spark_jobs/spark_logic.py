@@ -8,7 +8,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import explode, col, trim, split, when, concat_ws, collect_list, udf, struct, to_json
 from pyspark.sql.types import StringType, ArrayType, StructType, StructField
 
-from utils import create_dataframe, extract_and_process_regions
+from utils import create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data
 
 # Spark 세션 생성
 spark = SparkSession.builder \
@@ -47,24 +47,8 @@ df = create_dataframe(spark, data_list, schema)
 region_df = extract_and_process_regions(df)
 # 데이터 그룹화 및 정렬
 result_df = group_and_sort_data(region_df)
-
-
 # 데이터를 'CRT_DT' 필드를 기준으로 날짜 순으로 정렬하는 함수
-def sort_by_date(data):
-    sorted_data = sorted(data, key=lambda x: datetime.strptime(x['CRT_DT'], '%Y/%m/%d %H:%M:%S'))
-    return sorted_data
-
-# UDF 등록
-sort_udf = udf(sort_by_date, ArrayType(StructType([
-    StructField("SN", StringType(), True),
-    StructField("CRT_DT", StringType(), True),
-    StructField("MSG_CN", StringType(), True),
-    StructField("EMRG_STEP_NM", StringType(), True),
-    StructField("DST_SE_NM", StringType(), True)
-])))
-
-# 정렬된 데이터 프레임 생성
-sorted_df = result_df.withColumn("data", sort_udf(col("data")))
+sorted_df = sort_data_by_date(result_df)
 
 # JSON으로 변환
 json_df = sorted_df.withColumn("json_data", to_json(struct(col("*")))).select("json_data")
