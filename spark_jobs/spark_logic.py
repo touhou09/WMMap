@@ -49,9 +49,8 @@ region_df = extract_and_process_regions(df)
 result_df = group_and_sort_data(region_df)
 # 데이터를 'CRT_DT' 필드를 기준으로 날짜 순으로 정렬하는 함수
 sorted_df = sort_data_by_date(result_df)
-
 # JSON으로 변환
-json_df = sorted_df.withColumn("json_data", to_json(struct(col("*")))).select("json_data")
+json_df = convert_to_json(sorted_df)
 
 #나중에 S3나 DB에 저장하는 로직을 넣을 예정
 

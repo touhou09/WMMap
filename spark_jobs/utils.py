@@ -92,3 +92,9 @@ def sort_data_by_date(result_df):
     ])))
     
     return result_df.withColumn("data", sort_udf(col("data")))
+
+
+def convert_to_json(sorted_df):
+    # DataFrame을 JSON 형식으로 변환하는 함수.
+    
+    return sorted_df.withColumn("json_data", to_json(struct(col("*")))).select("json_data")
