@@ -13,7 +13,6 @@ class TestMyDAG(unittest.TestCase):
     def test_dag_loaded(self):
         dag = self.dagbag.get_dag(dag_id='spark_job_dag')
         self.assertIsNotNone(dag)
-        self.assertEqual(len(dag.tasks), 1)  # 'my_dag'가 3개의 태스크를 가질 것으로 기대
-
+        self.assertEqual(len(dag.tasks), 1)
 if __name__ == '__main__':
     unittest.main()

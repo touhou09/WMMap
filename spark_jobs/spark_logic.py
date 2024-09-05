@@ -16,13 +16,15 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # .env 파일의 경로를 지정하고 로드
-env_path = os.path.join(os.path.dirname(__file__), '.env')  # 수정된 부분
+env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
 # 환경 변수에서 값 가져오기
 service_key = os.getenv('SERVICE_KEY')
 url = os.getenv('URL')
 
+if not url:
+    raise ValueError("URL is not provided in the .env file.")
 
 # 일단 환경변수로 지정, 이후 airflow에서 서버날짜로 관리
 start_date = os.getenv('start_date')
