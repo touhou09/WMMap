@@ -49,8 +49,6 @@ def run_spark_task(**kwargs):
     service_key = os.getenv('SERVICE_KEY')
     url = os.getenv('URL')
 
-    # start_date를 받아서 'YYMMDD' 형식으로 변환
-    start_date = kwargs['execution_date'].strftime('%y%m%d')  # Airflow의 execution_date 사용
     
     # 하루를 더해 처리 날짜를 설정 (필요 시)
     process_date = (kwargs['execution_date'] + timedelta(days=1)).strftime('%y%m%d')
@@ -60,7 +58,12 @@ def run_spark_task(**kwargs):
         raise ValueError("URL or Service Key is not provided in the .env file or Airflow variables.")
 
     # Spark 작업 실행
-    result_json = spark_data_processing(service_key, url, process_date)
+    result_json = spark_data_processing(
+        service_key, 
+        url, 
+        process_date
+    )
+    
     return result_json
 
 # PythonOperator를 사용하여 Spark 작업을 Airflow Task로 정의
