@@ -1,60 +1,44 @@
 import os
-import json
-
-from utils import read_api
-from datetime import datetime
-from dotenv import load_dotenv
+from utils import read_api, create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data, convert_to_json
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import explode, col, trim, split, when, concat_ws, collect_list, udf, struct, to_json
-from pyspark.sql.types import StringType, ArrayType, StructType, StructField
+from pyspark.sql.types import StructType, StructField, StringType
 
-from utils import create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data, convert_to_json
+def spark_data_processing(service_key, url, start_date):
+    # Spark 세션 생성
+    spark = SparkSession.builder \
+        .appName("DataProcessingApp") \
+        .getOrCreate()
 
-# Spark 세션 생성
-spark = SparkSession.builder \
-    .appName("DataProcessingApp") \
-    .getOrCreate()
+    # API로부터 데이터 가져오기
+    data_list = read_api(service_key, url, start_date)
 
-# .env 파일의 경로를 지정하고 로드
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path=env_path)
+    # 데이터 스키마 정의
+    schema = StructType([
+        StructField("SN", StringType(), True),
+        StructField("CRT_DT", StringType(), True),
+        StructField("MSG_CN", StringType(), True),
+        StructField("EMRG_STEP_NM", StringType(), True),
+        StructField("DST_SE_NM", StringType(), True),
+        StructField("RCPTN_RGN_NM", StringType(), True)
+    ])
 
-# 환경 변수에서 값 가져오기
-service_key = os.getenv('SERVICE_KEY')
-url = os.getenv('URL')
+    # DataFrame 생성
+    df = create_dataframe(spark, data_list, schema)
+    
+    # 지역별로 데이터 추출 및 처리
+    region_df = extract_and_process_regions(df)
+    
+    # 데이터 그룹화 및 정렬
+    result_df = group_and_sort_data(region_df)
+    
+    # 데이터를 'CRT_DT' 필드를 기준으로 날짜 순으로 정렬
+    sorted_df = sort_data_by_date(result_df)
+    
+    # JSON으로 변환
+    json_df = convert_to_json(sorted_df)
 
-if not url:
-    raise ValueError("URL is not provided in the .env file.")
+    # 여기에서 S3나 DB에 저장하는 로직을 추가할 수 있습니다.
+    # 예: json_df.write.format("json").save("s3a://your-bucket/your-path")
 
-# 일단 환경변수로 지정, 이후 airflow에서 서버날짜로 관리
-start_date = os.getenv('start_date')
-
-
-# spark-read-api 에서 완성한 api read 함수
-data_list = read_api(service_key, url, start_date)
-
-# 데이터 스키마 정의
-schema = StructType([
-    StructField("SN", StringType(), True),
-    StructField("CRT_DT", StringType(), True),
-    StructField("MSG_CN", StringType(), True),
-    StructField("EMRG_STEP_NM", StringType(), True),
-    StructField("DST_SE_NM", StringType(), True),
-    StructField("RCPTN_RGN_NM", StringType(), True)
-])
-
-# df 만들기 함수 호출
-df = create_dataframe(spark, data_list, schema)
-# 지역별로 데이터 추출 및 처리 함수
-region_df = extract_and_process_regions(df)
-# 데이터 그룹화 및 정렬
-result_df = group_and_sort_data(region_df)
-# 데이터를 'CRT_DT' 필드를 기준으로 날짜 순으로 정렬하는 함수
-sorted_df = sort_data_by_date(result_df)
-# JSON으로 변환
-json_df = convert_to_json(sorted_df)
-
-#나중에 S3나 DB에 저장하는 로직을 넣을 예정
-
-# Spark 세션 종료
-spark.stop()
+    # Spark 세션 종료
+    spark.stop()

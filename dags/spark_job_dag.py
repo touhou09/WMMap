@@ -1,39 +1,64 @@
 from airflow import DAG
-from airflow.operators.bash import BashOperator
-from datetime import timedelta
-import pendulum
+from airflow.operators.python_operator import PythonOperator
+from airflow.utils.dates import days_ago
+import os
+from dotenv import load_dotenv
+from spark_jobs.spark_logic import spark_data_processing
 
-# 기본 인수 설정 (start_date는 과거로 설정)
+# .env 파일 로드 (Airflow 환경에 따라 설정할 수도 있음)
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
+
+# 기본 설정
 default_args = {
     'owner': 'airflow',
+    'start_date': days_ago(1),
     'depends_on_past': False,
-    'start_date': pendulum.now('Asia/Seoul').subtract(days=1),  # 1일 전으로 설정
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 5,
-    'retry_delay': timedelta(minutes=1),
+    'retries': 1,
 }
 
 # DAG 정의
 dag = DAG(
-    'spark_job_dag',
+    'spark_data_processing_dag',
     default_args=default_args,
-    description='10분마다 Spark 작업 실행',
-    schedule='*/10 * * * *',  # 10분마다 실행되는 크론 표현식
-    catchup=False,
+    description='DAG to run Spark data processing job',
+    schedule_interval=None,  # 필요시 스케줄 설정
 )
 
-# BashOperator를 통해 현재 시간을 .env 파일에 저장하고 Spark 작업 실행
-run_spark_job = BashOperator(
-    task_id='run_spark_job',
-    bash_command=(
-        'source /root/projects/.env && '  # .env 파일을 명시적으로 로드
-        'echo "start_date=$(date +\'%y%m%d\')" >> /root/projects/spark_jobs/.env && '  # 현재 시간을 기록
-        'spark-submit /root/projects/spark_jobs/spark_logic.py > /root/projects/spark_jobs/spark_job_output.log 2>&1 || '  # 성공 로그 및 오류 로그 출력
-        'echo "Spark job failed. Check /root/projects/spark_jobs/spark_job_output.log for details." && exit 1'
-    ),
+# Airflow Task로 실행할 함수
+def run_spark_task(**kwargs):
+
+    # .env 파일의 경로를 지정하고 로드
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    load_dotenv(dotenv_path=env_path)
+
+    # 환경 변수에서 값 가져오기
+    service_key = os.getenv('SERVICE_KEY')
+    url = os.getenv('URL')
+
+    if not url:
+        raise ValueError("URL is not provided in the .env file.")
+
+    # Airflow의 매개변수 혹은 .env 파일에서 값 가져오기
+    service_key = os.getenv('SERVICE_KEY')
+    url = os.getenv('URL')
+    start_date = kwargs.get('start_date')  # Airflow에서 전달된 파라미터
+
+    if not url or not service_key:
+        raise ValueError("URL or Service Key is not provided in the .env file or Airflow variables.")
+
+    # Spark 작업 실행
+    result_json = spark_data_processing(service_key, url, start_date)
+    return result_json
+
+# PythonOperator를 사용하여 Spark 작업을 Airflow Task로 정의
+spark_task = PythonOperator(
+    task_id='run_spark_processing',
+    python_callable=run_spark_task,
+    provide_context=True,  # Airflow context에서 매개변수를 받기 위해 설정
     dag=dag,
 )
 
-
-run_spark_job
+spark_task
