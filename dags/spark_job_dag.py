@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 import os
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from spark_jobs.spark_logic import spark_data_processing
 
@@ -9,14 +10,16 @@ from spark_jobs.spark_logic import spark_data_processing
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
+
 # 기본 설정
 default_args = {
     'owner': 'airflow',
-    'start_date': days_ago(1),
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
+    'start_date': datetime.now() - timedelta(days=1),  # 1일 전으로 설정
+    'depends_on_past': False,      # 과거 태스크에 의존하지 않도록 설정
+    'email_on_failure': False,     # 실패 시 이메일 알림 비활성화
+    'email_on_retry': False,       # 재시도 시 이메일 알림 비활성화
+    'retries': 3,                  # 실패 시 최대 3번 재시도
+    'retry_delay': timedelta(minutes=3),  # 3분마다 재시도
 }
 
 # DAG 정의
@@ -24,8 +27,9 @@ dag = DAG(
     'spark_data_processing_dag',
     default_args=default_args,
     description='DAG to run Spark data processing job',
-    schedule_interval=None,  # 필요시 스케줄 설정
+    schedule_interval='*/10 * * * *',  # 10분에 한 번씩 실행
 )
+
 
 # Airflow Task로 실행할 함수
 def run_spark_task(**kwargs):
@@ -44,13 +48,19 @@ def run_spark_task(**kwargs):
     # Airflow의 매개변수 혹은 .env 파일에서 값 가져오기
     service_key = os.getenv('SERVICE_KEY')
     url = os.getenv('URL')
-    start_date = kwargs.get('start_date')  # Airflow에서 전달된 파라미터
+
+    # start_date를 받아서 'YYMMDD' 형식으로 변환
+    start_date = kwargs['execution_date'].strftime('%y%m%d')  # Airflow의 execution_date 사용
+    
+    # 하루를 더해 처리 날짜를 설정 (필요 시)
+    process_date = (kwargs['execution_date'] + timedelta(days=1)).strftime('%y%m%d')
+
 
     if not url or not service_key:
         raise ValueError("URL or Service Key is not provided in the .env file or Airflow variables.")
 
     # Spark 작업 실행
-    result_json = spark_data_processing(service_key, url, start_date)
+    result_json = spark_data_processing(service_key, url, process_date)
     return result_json
 
 # PythonOperator를 사용하여 Spark 작업을 Airflow Task로 정의
