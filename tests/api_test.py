@@ -5,30 +5,42 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # .env 파일의 경로를 지정하고 로드
-env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=env_path)
 
 # 환경 변수에서 값 가져오기
-service_key = os.getenv('SERVICE_KEY')
-url = os.getenv('URL')
+service_key = os.getenv('service_key')
+
+if not service_key:
+    print("SERVICE_KEY가 설정되지 않았습니다.")
+    exit()
 
 params = {
     'serviceKey': service_key,
     'numOfRows': 30,  # 페이지당 개수 설정 (최대값으로 설정, 필요시 조정)
     'pageNo': 1,  # 페이지 번호를 1로 고정
-    'crtDt': '20240902',  # 조회 시작일자 (예: 2024년 8월 24일)
+    'crtDt': '20240906',  # 조회 시작일자 (예: 2024년 8월 24일)
 }
 region_data = {}  # 지역별 데이터를 저장할 딕셔너리
 
 while True:
     # GET 요청 보내기
+    url = 'https://www.safetydata.go.kr/V2/api/DSSP-IF-00247'
     response = requests.get(url, params=params)
     
     if response.status_code == 200:
         data = response.json()
         
+        # 응답 데이터 출력 (문제 발생 시 구조 파악을 위해)
+        print("응답 데이터:", json.dumps(data, ensure_ascii=False, indent=4))
+        
         # 응답에서 데이터 추출 및 날짜 정보 추가
-        body_data = data.get('body', [])
+        body_data = data.get('body', None)
+        
+        if body_data is None:
+            print("응답에 'body' 데이터가 없습니다. 루프를 종료합니다.")
+            break  # 'body' 데이터가 없을 때 반복 종료
+        
         for item in body_data:
             # 필요한 필드만 선택
             processed_item = {

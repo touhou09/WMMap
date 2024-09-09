@@ -5,7 +5,7 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-from utils import read_api, create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data, convert_to_json_and_upload_s3_directly
+from utils import read_api, create_dataframe, extract_and_process_regions, sort_data_by_date, group_and_sort_data, convert_to_json_and_upload_s3_directly, save_s3_link_to_dynamodb
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType
 
@@ -14,7 +14,8 @@ def spark_data_processing(
     start_date,
     bucket_name,
     aws_access_key_id,
-    aws_secret_access_key
+    aws_secret_access_key,
+    table_name
     ):
     # Spark 세션 생성
     spark = SparkSession.builder \
@@ -48,13 +49,20 @@ def spark_data_processing(
     sorted_df = sort_data_by_date(result_df)
     
     # JSON으로 변환
-    return convert_to_json_and_upload_s3_directly(
+    s3_link = convert_to_json_and_upload_s3_directly(
         sorted_df, 
         bucket_name,
         start_date,
         aws_access_key_id,
         aws_secret_access_key,
         spark
+    )
+    
+    save_s3_link_to_dynamodb(
+        s3_link=s3_link,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        table_name=table_name
     )
 
     # Spark 세션 종료

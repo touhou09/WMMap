@@ -1,11 +1,12 @@
 import os
+import json
 import requests
-from datetime import datetime
 import logging
-from dotenv import load_dotenv
 import boto3
 
+from dotenv import load_dotenv
 from datetime import datetime
+
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import split, trim, explode, when, concat_ws, col, collect_list, struct, to_json, udf
 from pyspark.sql.types import StringType, ArrayType, StructType, StructField
@@ -13,12 +14,6 @@ from pyspark.sql.types import StringType, ArrayType, StructType, StructField
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-import requests
-import logging
-
-# 로깅 설정
-logger = logging.getLogger("api_logger")
 
 def read_api(service_key, start_date):
     """API를 호출하고 데이터를 수집하여 반환하는 함수"""
@@ -35,47 +30,49 @@ def read_api(service_key, start_date):
     try:
         while True:
             # API 호출
+            url = 'https://www.safetydata.go.kr/V2/api/DSSP-IF-00247'
             
-            url='https://www.safetydata.go.kr/V2/api/DSSP-IF-00247'
-
+            response = requests.get(url, params=params)
             
-            response = requests.get(url, params=params)  # 타임아웃 추가
-
             if response.status_code == 200:
                 data = response.json()
+                
+                # 응답 데이터 출력 (디버깅용)
+                logger.info(f"응답 데이터: {json.dumps(data, ensure_ascii=False, indent=4)}")
 
-                # body_data가 존재하는지 확인
-                body_data = data.get('body')
+                body_data = data.get('body', None)
+                
                 if body_data is None:
-                    logger.warning("응답에 'body' 데이터가 없습니다.")
-                    break
+                    logger.warning("응답에 'body' 데이터가 없습니다. 루프를 종료합니다.")
+                    break  # 'body' 데이터가 없을 때 반복 종료
 
                 # body_data가 리스트가 아닌 경우 빈 리스트로 처리
                 data_list.extend(body_data if isinstance(body_data, list) else [])
-
+                
                 # totalCount가 없으면 더 이상 호출하지 않음
                 total_count = data.get('totalCount')
                 if total_count is None:
                     logger.warning("totalCount가 응답에 없습니다. 더 이상 데이터를 가져오지 않습니다.")
                     break
 
+                # 현재 페이지가 마지막 페이지인지 확인
                 current_page = params['pageNo']
                 num_of_rows = params['numOfRows']
-
-                # 마지막 페이지인지 확인
                 if current_page * num_of_rows >= total_count:
                     break
 
                 # 페이지 번호 증가
                 params['pageNo'] += 1
+
             else:
                 logger.error(f"요청 실패: {response.status_code}, 응답 내용: {response.text}")
-                break
+                break  # 실패 시 루프 종료
 
     except requests.exceptions.RequestException as e:
         logger.error(f"API 요청 중 오류 발생: {str(e)}")
 
     return data_list
+
 
 
 def create_dataframe(spark, data_list, schema):
@@ -125,6 +122,10 @@ def sort_data_by_date(result_df):
     return result_df.withColumn("data", sort_udf(col("data")))
 
 
+import boto3
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import to_json, struct, col
+
 def convert_to_json_and_upload_s3_directly(
     sorted_df: DataFrame, 
     bucket_name: str, 
@@ -135,7 +136,7 @@ def convert_to_json_and_upload_s3_directly(
     ):
     """
     DataFrame을 JSON으로 변환하고, 로컬 파일을 거치지 않고 S3에 직접 저장하는 함수.
-    파일명이 같으면 덮어씁니다.
+    파일명을 'file.json'으로 저장.
     
     :param sorted_df: Spark DataFrame
     :param bucket_name: S3 버킷 이름
@@ -159,15 +160,78 @@ def convert_to_json_and_upload_s3_directly(
     # DataFrame을 JSON 형식으로 변환
     json_df = sorted_df.withColumn("json_data", to_json(struct(col("*")))).select("json_data")
 
-    
     # S3 경로 설정 (start_date를 경로에 포함)
-    s3_key = f"data/{start_date}/file.json"
+    s3_key = f"data/{start_date}/"
     s3_path = f"s3a://{bucket_name}/{s3_key}"
     
     # DataFrame을 S3에 저장 (overwrite 모드)
     json_df.coalesce(1).write.mode("overwrite").json(s3_path)
 
+    # Spark가 생성한 파일을 boto3로 file.json으로 이름 변경
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region_name=region_name
+    )
+
+    # 업로드된 파일의 경로를 찾아서 'file.json'으로 변경
+    response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=s3_key)
+    for content in response.get('Contents', []):
+        if content['Key'].endswith('.json'):
+            original_file_key = content['Key']
+            break
+
+    # 원래 파일을 'file.json'으로 복사
+    new_file_key = f"{s3_key}file.json"
+    s3_client.copy_object(
+        Bucket=bucket_name,
+        CopySource={'Bucket': bucket_name, 'Key': original_file_key},
+        Key=new_file_key
+    )
+
+    # 원래 파일 삭제
+    s3_client.delete_object(Bucket=bucket_name, Key=original_file_key)
+
     # S3 파일 URL 반환
-    file_url = f"https://{bucket_name}.s3.{region_name}.amazonaws.com/{s3_key}"
+    file_url = f"https://{bucket_name}.s3.{region_name}.amazonaws.com/{new_file_key}"
     
     return file_url
+
+
+def save_s3_link_to_dynamodb(s3_link: str, aws_access_key_id: str, aws_secret_access_key: str, table_name: str):
+    """
+    S3 링크와 현재 날짜를 기반으로 DynamoDB에 데이터를 저장하는 함수.
+    동일한 파티션 키(날짜)가 있으면 덮어씀.
+
+    :param s3_link: S3에 저장된 파일의 링크
+    :param aws_access_key_id: AWS Access Key
+    :param aws_secret_access_key: AWS Secret Key
+    :param table_name: DynamoDB 테이블 이름
+    :param region_name: AWS 리전
+    """
+    region_name = 'ap-northeast-2'
+    
+    # 현재 날짜를 yyyymmdd 형식으로 가져옴
+    current_date = datetime.now().strftime('%Y%m%d')
+
+    # boto3 클라이언트 생성
+    dynamodb = boto3.resource(
+        'dynamodb',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region_name=region_name
+    )
+
+    # 테이블 가져오기
+    table = dynamodb.Table(table_name)
+
+    # 데이터 저장 (동일한 파티션 키가 있을 경우 덮어씌움)
+    response = table.put_item(
+        Item={
+            'date': current_date,  # 파티션 키로 사용될 날짜
+            's3_link': s3_link     # S3 파일 링크
+        }
+    )
+
+    return response
