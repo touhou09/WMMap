@@ -1,25 +1,29 @@
+import logging
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator  # Airflow 2.0 이상 호환
 from airflow.utils.dates import days_ago
-import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import os
+import sys
+
+# 프로젝트의 절대 경로를 sys.path에 추가하여 spark_logic을 찾을 수 있도록 설정
+project_path = '/root/projects'
+sys.path.append(project_path)
+
+# 이제 spark_logic 모듈을 임포트할 수 있습니다
 from spark_jobs.spark_logic import spark_data_processing
 
-# .env 파일 로드 (Airflow 환경에 따라 설정할 수도 있음)
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path=env_path)
-
-
-# 기본 설정
+# 기본 설정에 태스크 실행 시간 제한을 추가
 default_args = {
     'owner': 'airflow',
-    'start_date': datetime.now() - timedelta(days=1),  # 1일 전으로 설정
-    'depends_on_past': False,      # 과거 태스크에 의존하지 않도록 설정
-    'email_on_failure': False,     # 실패 시 이메일 알림 비활성화
-    'email_on_retry': False,       # 재시도 시 이메일 알림 비활성화
-    'retries': 3,                  # 실패 시 최대 3번 재시도
-    'retry_delay': timedelta(minutes=3),  # 3분마다 재시도
+    'start_date': days_ago(1),  # 명시적으로 1일 전으로 설정
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 3,
+    'retry_delay': timedelta(minutes=3),
+    'execution_timeout': timedelta(minutes=10),  # 실행 시간 제한 설정
 }
 
 # DAG 정의
@@ -30,47 +34,45 @@ dag = DAG(
     schedule_interval='*/10 * * * *',  # 10분에 한 번씩 실행
 )
 
-
-# Airflow Task로 실행할 함수
-def run_spark_task(**kwargs):
-
-    # .env 파일의 경로를 지정하고 로드
-    env_path = os.path.join(os.path.dirname(__file__), '.env')
-    load_dotenv(dotenv_path=env_path)
-
-    # 환경 변수에서 값 가져오기
-    service_key = os.getenv('SERVICE_KEY')
-    url = os.getenv('URL')
-
-    if not url:
-        raise ValueError("URL is not provided in the .env file.")
-
-    # Airflow의 매개변수 혹은 .env 파일에서 값 가져오기
-    service_key = os.getenv('SERVICE_KEY')
-    url = os.getenv('URL')
-
+def run_spark_task(execution_date, **kwargs):
+    logger = logging.getLogger("airflow.task")
     
-    # 하루를 더해 처리 날짜를 설정 (필요 시)
-    process_date = (kwargs['execution_date'] + timedelta(days=1)).strftime('%y%m%d')
-
-
-    if not url or not service_key:
-        raise ValueError("URL or Service Key is not provided in the .env file or Airflow variables.")
-
-    # Spark 작업 실행
-    result_json = spark_data_processing(
-        service_key, 
-        url, 
-        process_date
-    )
+    # .env 파일 로드 (Airflow 환경에 따라 설정할 수도 있음)
+    load_dotenv()
     
-    return result_json
+    try:
+        # 환경 변수에서 값 가져오기
+        service_key = os.getenv('service_key')
+        bucket_name = os.getenv('bucket_name')
+        aws_access_key_id = os.getenv('aws_access_key_id')
+        aws_secret_access_key = os.getenv('aws_secret_access_key')
+    
+        logger.info(f"Service Key: {service_key}")
+
+        # process_date 계산
+        process_date = (datetime.strptime(execution_date, '%Y-%m-%d') + timedelta(days=1)).strftime('%y%m%d')
+
+        # Spark 작업 실행
+        result_json = spark_data_processing(
+            service_key, 
+            process_date,
+            bucket_name,
+            aws_access_key_id,
+            aws_secret_access_key,
+        )
+        
+        logger.info(f"Spark 작업이 성공적으로 완료되었습니다: {result_json}")
+        return result_json
+
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}")
+        raise
 
 # PythonOperator를 사용하여 Spark 작업을 Airflow Task로 정의
 spark_task = PythonOperator(
     task_id='run_spark_processing',
     python_callable=run_spark_task,
-    provide_context=True,  # Airflow context에서 매개변수를 받기 위해 설정
+    op_kwargs={'execution_date': '{{ ds }}'},  # Jinja 템플릿 사용
     dag=dag,
 )
 
