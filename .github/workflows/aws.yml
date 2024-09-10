@@ -35,10 +35,9 @@ env:
   ECR_REPOSITORY: wmmap-repo
   ECS_SERVICE: my-ecs-service            
   ECS_CLUSTER: my-cluster         
-  ECS_TASK_DEFINITION: MY_ECS_TASK_DEFINITION # set this to the path to your Amazon ECS task definition
+  ECS_TASK_DEFINITION: /.github/workflows/task-definition.json
                                              
-  CONTAINER_NAME: MY_CONTAINER_NAME           # set this to the name of the container in the
-                                               # containerDefinitions section of your task definition
+  CONTAINER_NAME: my-container
 
 permissions:
   id-token: write
