@@ -11,7 +11,7 @@ env:
   ECS_CLUSTER: my-cluster         
   ECS_TASK_DEFINITION: .github/workflows/task-definition.json
                                              
-  CONTAINER_NAME: my-container
+  CONTAINER_NAME: ubuntu-container
 
 permissions:
   id-token: write
