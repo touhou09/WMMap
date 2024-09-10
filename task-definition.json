@@ -1,0 +1,100 @@
+{
+    "family": "my-ecs-project",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "512",
+    "memory": "1024",
+    "executionRoleArn": "arn:aws:iam::487588477706:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+      {
+        "name": "ubuntu-container",
+        "image": "487588477706.dkr.ecr.ap-northeast-2.amazonaws.com/my-ubuntu-image:latest",
+        "essential": true,
+        "command": ["tail", "-f", "/dev/null"],
+        "memory": 512,
+        "cpu": 256,
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/my-ecs-project",
+            "awslogs-region": "ap-northeast-2",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      },
+      {
+        "name": "spark-master",
+        "image": "bitnami/spark:3.5.2",
+        "essential": true,
+        "memory": 512,
+        "cpu": 256,
+        "portMappings": [
+          {
+            "containerPort": 7077,
+            "hostPort": 7077,
+            "protocol": "tcp"
+          },
+          {
+            "containerPort": 8080,
+            "hostPort": 8080,
+            "protocol": "tcp"
+          }
+        ],
+        "environment": [
+          {
+            "name": "SPARK_MODE",
+            "value": "master"
+          },
+          {
+            "name": "SPARK_MASTER_HOST",
+            "value": "spark-master"
+          },
+          {
+            "name": "PYSPARK_PYTHON",
+            "value": "/opt/bitnami/python/bin/python3"
+          },
+          {
+            "name": "PYSPARK_DRIVER_PYTHON",
+            "value": "/opt/bitnami/python/bin/python3"
+          }
+        ],
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/my-ecs-project",
+            "awslogs-region": "ap-northeast-2",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      },
+      {
+        "name": "spark-worker",
+        "image": "bitnami/spark:3.5.2",
+        "essential": true,
+        "memory": 512,
+        "cpu": 256,
+        "environment": [
+          {
+            "name": "SPARK_MODE",
+            "value": "worker"
+          },
+          {
+            "name": "SPARK_MASTER_URL",
+            "value": "spark://spark-master:7077"
+          },
+          {
+            "name": "PYSPARK_PYTHON",
+            "value": "/opt/bitnami/python/bin/python3"
+          }
+        ],
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/my-ecs-project",
+            "awslogs-region": "ap-northeast-2",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      }
+    ]
+  }
