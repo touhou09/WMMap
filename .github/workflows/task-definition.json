@@ -45,7 +45,7 @@
         },
         {
           "name": "SPARK_MASTER_HOST",
-          "value": "spark-master"
+          "value": "spark-master.my-ecs-project.local"
         },
         {
           "name": "PYSPARK_PYTHON",
