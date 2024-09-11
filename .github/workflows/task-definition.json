@@ -78,7 +78,7 @@
         },
         {
           "name": "SPARK_MASTER_URL",
-          "value": "spark://my-ecs-service:7077"
+          "value": "spark://spark-master:7077"
         },
         {
           "name": "PYSPARK_PYTHON",
