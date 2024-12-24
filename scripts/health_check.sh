@@ -1,12 +1,14 @@
 #!/bin/bash
 
+LOG_FILE="/logs/container_health.log"
+
 check_container() {
     container_name=$1
     if docker ps --filter "name=$container_name" --filter "status=running" | grep "$container_name" > /dev/null; then
-        echo "$container_name is running."
+        echo "$(date): $container_name is running." >> $LOG_FILE
         return 0
     else
-        echo "$container_name is not running."
+        echo "$(date): $container_name is not running." >> $LOG_FILE
         return 1
     fi
 }
@@ -15,14 +17,13 @@ check_spark_worker() {
     master_url="http://spark-master:8080"
     worker_name=$1
 
-    # Master의 Worker 목록 가져오기
     workers=$(curl -s "${master_url}/json" | jq -r '.workers[].id')
 
     if echo "$workers" | grep -q "$worker_name"; then
-        echo "$worker_name is registered with Spark Master."
+        echo "$(date): $worker_name is registered with Spark Master." >> $LOG_FILE
         return 0
     else
-        echo "$worker_name is NOT registered with Spark Master."
+        echo "$(date): $worker_name is NOT registered with Spark Master." >> $LOG_FILE
         return 1
     fi
 }
